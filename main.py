@@ -3,9 +3,8 @@ import os
 import shutil
 import sys
 import time
-from datetime import datetime
 from enum import Enum
-from typing import List
+from typing import List, Union
 
 import gtts
 import playsound
@@ -53,11 +52,12 @@ def scrape_for_ticker_prices(repeat_alerts: bool = True):
                     req = session.request("GET", os.path.join(_YAHOO_FINANCE_URL, ticker_data.ticker))
                     lines = req.text.splitlines()
                     price = determine_current_ticker_price(lines)
-                    log.info(f"Price of [{ticker_data.ticker}] is [{price}]")
-                    is_price_breached = play_alert_if_price_breached(ticker_data, price)
-                    if is_price_breached and not repeat_alerts:
-                        ticker_data_list.remove(ticker_data)
-                        log.info(f"Removed {ticker_data} from list")
+                    if price:
+                        log.info(f"Price of [{ticker_data.ticker}] is [{price}]")
+                        is_price_breached = play_alert_if_price_breached(ticker_data, price)
+                        if is_price_breached and not repeat_alerts:
+                            ticker_data_list.remove(ticker_data)
+                            log.info(f"Removed {ticker_data} from list")
                     time.sleep(5)
     else:
         log.info(
@@ -74,15 +74,18 @@ def reset_temp_dir():
     os.mkdir(_TMP_DIR)
 
 
-def determine_current_ticker_price(lines: List[str]) -> float:
-    price = 0
+def determine_current_ticker_price(lines: List[str]) -> Union[float, None]:
+    price = None
     for line in lines:
         if _EXTENDED_MKT_HTML_PREFIX in line:
             price = get_price_from_html(line, _EXTENDED_MKT_HTML_PREFIX)
             break
         elif _DAILY_MKT_HTML_PREFIX in line:
             price = get_price_from_html(line, _DAILY_MKT_HTML_PREFIX)
-    return float(price)
+    try:
+        return float(price)
+    except ValueError:
+        return None
 
 
 def play_alert_if_price_breached(ticker_data: TickerData, price: float) -> bool:
